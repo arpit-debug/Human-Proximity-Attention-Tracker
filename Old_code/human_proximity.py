@@ -60,8 +60,6 @@ while cap.isOpened():
         print("Frame count",Frame_count)
         Frame_count += 1
         Time_in_video = round(Frame_count/fps,2)
-        # import pdb
-        # pdb.set_trace()
         for box in result.boxes.data:
             x1, y1, x2, y2, conf, cls = box.tolist()
             if int(cls) == 0:  # Class 0 is 'person'
