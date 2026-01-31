@@ -247,6 +247,13 @@ See [MODULE_STRUCTURE.md](MODULE_STRUCTURE.md) for detailed module documentation
 - `config.py` – Configuration flags
 - `requirements.txt` – Python dependencies
 
-Note:
-Audio Advertice generation site
-https://www.wondercraft.ai/studio
+---
+
+## Resources & Tools
+
+### Audio Generation
+Need to generate advertisement audio files for your campaigns? Use:
+- **[Wondercraft AI Studio](https://www.wondercraft.ai/studio)** – AI-powered audio/voiceover generation
+  - Generate natural-sounding ads and announcements
+  - Download as MP3 and place in `Campain_Audio/<Campaign_name>/` folder
+  - Supports multiple languages and voice styles
