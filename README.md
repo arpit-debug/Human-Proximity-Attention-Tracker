@@ -246,3 +246,7 @@ See [MODULE_STRUCTURE.md](MODULE_STRUCTURE.md) for detailed module documentation
 - `audio_player.py` – Audio playback
 - `config.py` – Configuration flags
 - `requirements.txt` – Python dependencies
+
+Note:
+Audio Advertice generation site
+https://www.wondercraft.ai/studio
