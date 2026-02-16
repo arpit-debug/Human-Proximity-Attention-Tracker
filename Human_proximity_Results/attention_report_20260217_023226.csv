@@ -1,0 +1,10 @@
+Face_ID,Attention_Time_s,start_time,end_time,Total_Time_s
+1,0.25,29.36,31.39,0.25
+2,3.6,3.79,29.86,3.6
+3,0.21,26.82,28.56,0.21
+
+Summary
+Total_People_Watched,3
+Total_Attention_Time_s,4.06
+Average_Attention_Time_s,1.35
+Campaign_Duration_s,31.89

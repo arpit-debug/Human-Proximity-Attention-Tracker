@@ -1,173 +1,231 @@
-# Human Proximity Attention Tracker
+Here is your **updated README**, modified to reflect:
 
-Lightweight camera system that detects nearby people, identifies frontal faces (people looking at the camera), and tracks per-face attention duration. Designed to run on desktop/laptop and on Raspberry Pi (with Picamera2) for low-latency capture.
+* ✅ SCRFD + ArcFace pipeline
+* ✅ Picamera2 switch via `IS_RASPBERRY_PI`
+* ✅ Graph generation (`People vs Time`)
+* ✅ New CSV summary format
+* ✅ Integer-only Y-axis in plot
+* ✅ Embedding-based ID system (not Haar + distance tracker anymore)
 
 ---
 
-## Installation
+# Human Proximity Attention Tracker (SCRFD + ArcFace)
 
-### 1. Install Python Dependencies
+Lightweight AI-powered attention analytics system that:
+
+* Detects faces using **SCRFD**
+* Identifies unique people using **ArcFace embeddings**
+* Tracks per-person attention duration
+* Generates:
+
+  * 📊 Attention CSV Report
+  * 📈 People vs Time graph
+* Supports:
+
+  * 💻 Desktop (cv2)
+  * 🍓 Raspberry Pi (Picamera2 – low latency)
+
+---
+
+# Installation
+
+## 1️⃣ Install Python Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
-**Dependencies:**
-- `opencv-python` – Video capture & face detection
-- `python-vlc` – Audio playback
+### Required Libraries
 
-### 2. Install System VLC (Required for Audio)
+* `opencv-python`
+* `onnxruntime`
+* `numpy`
+* `matplotlib`
+* `python-vlc`
+* `picamera2` (Raspberry Pi only)
 
-**Windows:**
-- Download from [https://www.videolan.org/vlc/](https://www.videolan.org/vlc/) and install
+---
 
-**macOS:**
+## 2️⃣ Install System VLC (Required for Audio)
+
+### Windows
+
+Download from:
+[https://www.videolan.org/vlc/](https://www.videolan.org/vlc/)
+
+### macOS
+
 ```bash
 brew install vlc
 ```
 
-**Linux / Raspberry Pi:**
+### Linux / Raspberry Pi
+
 ```bash
 sudo apt update
 sudo apt install vlc
 ```
 
-### 3. (Optional) Install Picamera2 on Raspberry Pi
-If using Raspberry Pi with `IS_RASPBERRY_PI = True`:
+---
+
+## 3️⃣ Install Picamera2 (Raspberry Pi Only)
+
+If using:
+
+```python
+IS_RASPBERRY_PI = True
+```
+
+Install:
+
 ```bash
 sudo apt install -y python3-picamera2
 ```
 
 ---
 
-## Configuration
+# Configuration
 
-Edit `config.py` to customize behavior:
+Edit `config.py`:
 
 ```python
-# 1. Display Settings
-DEBUG = True              # True: Show GUI with face boxes | False: Print to terminal only
+# Display
+DEBUG = True
 
-# 2. Tracking Settings
-STALE_FACE_TIMEOUT = 3.0  # Remove tracked face if not seen for > 3 seconds
+# Tracking
+STALE_FACE_TIMEOUT = 3.0
 
-# 3. Platform Settings
-IS_RASPBERRY_PI = False   # True: Use Picamera2 on Pi | False: Use cv2.VideoCapture
+# Platform
+IS_RASPBERRY_PI = False  # True = Picamera2 | False = cv2
 
-# 4. Audio Settings
-Campaign_name = "default"       # Campaign folder name (searches Campain_Audio/<Campaign_name>/)
-AUDIO_FILE = None               # Fallback audio file if campaign folder not found
+# Audio
+Campaign_name = "default"
+AUDIO_FILE = None
 ```
 
-### Configuration Examples
+---
 
-**Desktop/Laptop with GUI:**
+## Configuration Examples
+
+### Desktop with GUI
+
 ```python
 DEBUG = True
 IS_RASPBERRY_PI = False
-Campaign_name = "default"
 ```
 
-**Raspberry Pi Headless (No Display):**
+### Raspberry Pi Headless (Recommended)
+
 ```python
 DEBUG = False
 IS_RASPBERRY_PI = True
-Campaign_name = "default"
 ```
 
-**Custom Audio Campaign:**
+---
+
+# Camera Backend Logic
+
+The system automatically switches capture backend:
+
+### Desktop
+
 ```python
-Campaign_name = "my_campaign"
-# Create folder: Campain_Audio/my_campaign/
-# Add MP3 files inside (first one will be played)
+cv2.VideoCapture(0)
+```
+
+### Raspberry Pi
+
+```python
+Picamera2.capture_array()
+```
+
+Picamera2 advantages:
+
+* Lower latency
+* Stable FPS
+* Native Raspberry Pi camera stack
+* No extra frame conversion
+
+---
+
+# Running
+
+```bash
+python main.py
+```
+
+### GUI Mode
+
+* `DEBUG = True`
+* Press **Q** to exit
+
+### Headless Mode
+
+* `DEBUG = False`
+* Press **Ctrl+C** to exit
+
+---
+
+# System Pipeline (Actual Architecture)
+
+```
+Frame Capture (cv2 or Picamera2)
+        ↓
+SCRFD Face Detection
+        ↓
+Head Pose Filtering (Yaw + Pitch)
+        ↓
+ArcFace Embedding Extraction
+        ↓
+Cosine Similarity Matching
+        ↓
+Assign / Reuse Face ID
+        ↓
+Update Attention Time
+        ↓
+Cleanup Stale Faces
+        ↓
+Generate:
+   • CSV Report
+   • Summary
+   • People vs Time Graph
 ```
 
 ---
 
-## Running the Code
+# Terminal Output Example
 
-### Option 1: GUI Mode (See Live Video)
-```bash
-python face_detection.py
 ```
-**Requirements:**
-- `config.DEBUG = True`
-- Display/monitor connected
-- Press **Q** to exit
-
-### Option 2: Headless Mode (Terminal Output)
-```bash
-python face_detection.py
+FPS: 31.2 | Detected: 2 | Tracked: 1
+FPS: 30.8 | Detected: 1 | Tracked: 1
+FPS: 29.9 | Detected: 0 | Tracked: 1
 ```
-**Requirements:**
-- `config.DEBUG = False`
-- No display needed
-- Press **Ctrl+C** to exit and show final report
 
-### Option 3: Raspberry Pi (Headless, No GUI)
-```bash
-# config.py settings:
-# IS_RASPBERRY_PI = True
-# DEBUG = False
+### Meaning
 
-python face_detection.py
+* **Detected** → Faces detected in current frame
+* **Tracked** → Unique active people being tracked
+* **FPS** → Performance metric
+
+---
+
+# CSV Output
+
+Auto-saved to:
+
+```
+Human_proximity_Results/attention_report_<timestamp>.csv
 ```
 
 ---
 
-## Sample Output
+## Example CSV
 
-### Live Terminal Output (GUI or Headless)
-```
-FPS: 32.1 | Detected: 0 | Tracked: 1
-FPS: 30.9 | Detected: 0 | Tracked: 1
-FPS: 31.1 | Detected: 0 | Tracked: 1
-FPS: 30.4 | Detected: 0 | Tracked: 1
-FPS: 32.3 | Detected: 1 | Tracked: 1
-FPS: 29.8 | Detected: 0 | Tracked: 1
-FPS: 32.9 | Detected: 1 | Tracked: 1
-FPS: 20.5 | Detected: 0 | Tracked: 1
-FPS: 32.2 | Detected: 1 | Tracked: 1
-FPS: 31.0 | Detected: 1 | Tracked: 1
-FPS: 32.3 | Detected: 1 | Tracked: 1
-FPS: 31.2 | Detected: 1 | Tracked: 1
-
-[!] Interrupted by user
-```
-
-**Output Explanation:**
-- **FPS**: Frames per second (30 FPS typical for webcam)
-- **Detected**: Number of frontal faces found in current frame
-- **Tracked**: Number of faces actively being tracked across frames
-
-### Final Report (On Exit)
-```
-============================================================
-FINAL REPORT - Face Attention Times
-============================================================
-Face 1:
-  Attention Time:  2.45s
-  Total Time:      2.45s
-  Attention %:     100.0%
-
-Campaign Duration (Start → Stop):  2.45s
-============================================================
-```
-
-**Report Explanation:**
-- **Attention Time**: Duration face was detected in frame (seconds)
-- **Total Time**: Duration face was being tracked (seconds)
-- **Attention %**: (Attention Time / Total Time) × 100 = % of time looking at camera
-- **Campaign Duration**: Overall time from script start to stop
-
-### CSV Output (Auto-saved)
-Each session automatically saves results to `Human_proximity_Results/attention_report_<timestamp>.csv`
-
-**Example CSV Output:**
 ```csv
-Face_ID,Attention_Time_s,Total_Time_s
-1,8.0,8.0
-2,5.5,6.2
-3,3.2,4.5
+Face_ID,Attention_Time_s,start_time,end_time,Total_Time_s
+1,8.0,2.1,10.1,8.0
+2,5.5,12.2,18.4,6.2
+3,3.2,20.5,25.0,4.5
 
 Summary
 Total_People_Watched,3
@@ -176,78 +234,128 @@ Average_Attention_Time_s,5.57
 Campaign_Duration_s,45.3
 ```
 
-**CSV Explanation:**
-- **Face_ID**: Unique person identifier (each ID = one person)
-- **Attention_Time_s**: Time that person looked at camera (frontal face detected)
-- **Total_Time_s**: Total time that person was tracked on screen
-- **Total_People_Watched**: Number of unique people detected
-- **Total_Attention_Time_s**: Sum of all attention times across all people
-- **Average_Attention_Time_s**: Average attention time per person
-- **Campaign_Duration_s**: Overall time from script start to stop
+---
+
+## Metrics Explained
+
+| Metric               | Meaning                         |
+| -------------------- | ------------------------------- |
+| Face_ID              | Unique embedding-based identity |
+| Attention_Time_s     | Seconds looking at camera       |
+| Total_Time_s         | Total seconds on screen         |
+| Total_People_Watched | Unique identities detected      |
+| Campaign_Duration_s  | Total runtime                   |
 
 ---
 
-## Pipeline Flow
+# Graph Output
+
+Also auto-saved:
 
 ```
-Frame arrives → read_frame()
-    ↓
-detect_faces(frame)
-    ↓
-build_detections(faces)
-    ↓
-tracker.update(detections, curr_time, dt)
-    ├─→ _compute_distances()      [All pairwise distances]
-    ├─→ _greedy_assignment()      [One-to-one matching]
-    ├─→ _assign_ids()             [Reuse or create face IDs]
-    ├─→ _update_tracking()        [Update position & time]
-    └─→ _cleanup_stale()          [Remove old faces]
-    ↓
-Display/Print Results
-    ↓
-Exit on Q or Ctrl+C → Print Final Report
+Human_proximity_Results/people_vs_time_<timestamp>.png
+```
+
+### Graph Details
+
+* X-axis → Time (seconds)
+* Y-axis → Number of People (Integer only)
+* Automatically enforced using:
+
+```python
+MaxNLocator(integer=True)
 ```
 
 ---
 
-## CSV Report Format
+# Identity System (ArcFace Based)
 
-The system automatically saves detailed reports in CSV format after each session.
+Instead of simple distance tracking:
 
-**Location:** `Human_proximity_Results/attention_report_<YYYYMMDD_HHMMSS>.csv`
+* Extract 512-D normalized embedding
+* Compute cosine similarity
+* If similarity > threshold → reuse ID
+* Else → create new ID
 
-**Example Report (3 people watched):**
+```python
+sim = np.dot(a, b)
+```
 
-| Face_ID | Attention_Time_s | Total_Time_s |
-|---------|-----------------|--------------|
-| 1 | 8.0 | 8.0 |
-| 2 | 5.5 | 6.2 |
-| 3 | 3.2 | 4.5 |
-| | | |
-| **Summary** | | |
-| Total_People_Watched | 3 | |
-| Total_Attention_Time_s | 16.7 | |
-| Average_Attention_Time_s | 5.57 | |
-| Campaign_Duration_s | 45.3 | |
+Default similarity threshold:
 
-**Key Metrics:**
-- **Face_ID**: Unique person identifier (each ID = one person visit)
-- **Attention_Time_s**: Seconds person looked at camera
-- **Total_Time_s**: Total seconds person was on screen
-- **Total_People_Watched**: Number of unique individuals tracked
-- **Campaign_Duration_s**: Total runtime (script start → stop)
+```python
+0.45
+```
 
-See [MODULE_STRUCTURE.md](MODULE_STRUCTURE.md) for detailed module documentation.
+This allows:
 
-**Key Files:**
-- `face_detection.py` – Main orchestrator
-- `detector.py` – Face detection (camera + Haar cascade)
-- `tracker.py` – Face tracking & ID assignment
-- `audio_player.py` – Audio playback
-- `config.py` – Configuration flags
-- `requirements.txt` – Python dependencies
+* Re-identification after short disappearance
+* More stable identity tracking
+* Person-level analytics
 
 ---
+
+# Performance Notes (Important)
+
+For Raspberry Pi:
+
+* Use 640x480 resolution
+* Consider computing embedding every N frames
+* Avoid running GUI (`DEBUG = False`)
+* Use Picamera2 backend
+
+---
+
+# Output Artifacts Per Session
+
+Each run generates:
+
+* 📄 CSV Report
+* 📊 Summary printed in terminal
+* 📈 People vs Time graph
+
+No data is overwritten (timestamped).
+
+---
+
+# Campaign Audio
+
+Place audio in:
+
+```
+Campain_Audio/<Campaign_name>/
+```
+
+System automatically:
+
+* Searches folder
+* Plays first audio file
+* Stops when no one is present
+
+---
+
+# Hardware Requirements
+
+### Minimum (Desktop)
+
+* CPU with AVX support
+* 4GB RAM
+
+### Raspberry Pi Recommended
+
+* Raspberry Pi 4 (4GB or 8GB)
+* Official Pi Camera Module
+* 64-bit OS
+
+---
+
+# Use Cases
+
+* Retail attention analytics
+* Campaign performance tracking
+* Exhibition engagement measurement
+* Smart advertising display systems
+
 
 ## Resources & Tools
 

@@ -22,7 +22,8 @@ class AudioPlayer:
             try:
                 import vlc
                 self._vlc = vlc
-                self._instance = vlc.Instance()
+                #self._instance = vlc.Instance()
+                self._instance = vlc.Instance("--aout=directsound")
                 self._player = self._instance.media_player_new()
             except Exception:
                 # If vlc is not available, disable audio

@@ -1,274 +1,327 @@
-# Face Detection & Attention Tracking System
+Here is the **fully updated module documentation**, aligned with your new architecture:
 
-## Project Structure
+* ❌ No more Haar cascade
+* ❌ No more centroid greedy tracker
+* ❌ No YOLO
+* ✅ SCRFD (ONNX) detector
+* ✅ ArcFace embeddings for identity
+* ✅ Cosine similarity matching
+* ✅ CSV + Summary + Graph output
+* ✅ Picamera2 backend switch
+* ✅ Attention tracking based on head pose
+
+---
+
+# Face Detection & Attention Tracking System (SCRFD + ArcFace)
+
+## Updated Project Structure
 
 ```
 Human_proximity_sensor/
-├── face_detection.py       ← Main script (clean, easy to read)
-├── detector.py             ← Face detection logic (isolated module)
-├── tracker.py              ← Face tracking & ID assignment (isolated module)
-├── audio_player.py         ← Audio playback & campaign management
-├── config.py               ← Configuration (DEBUG, Campaign, IS_RASPBERRY_PI)
-├── requirements.txt        ← Dependencies
-├── .gitignore              ← Git ignore rules
-├── haarcascade_frontalface_default.xml  ← Haar cascade file
-├── yolov8n.pt              ← YOLOv8 model
-├── Campain_Audio/          ← Campaign audio folder (optional)
-└── Human_proximity_Results/← Results output folder
+├── main.py                         ← Main orchestrator (SCRFD + ArcFace)
+├── scrfd.py                        ← SCRFD face detection wrapper
+├── audio_player.py                 ← Audio playback manager
+├── config.py                       ← Configuration flags
+├── Models/
+│   ├── scrfd_500m_bnkps.onnx
+│   └── arcface.onnx
+├── Campain_Audio/
+├── Human_proximity_Results/
+├── requirements.txt
+└── README.md
 ```
 
 ---
 
-## Module Overview
+# Architecture Overview
 
-### 1. `face_detection.py` (Main Script)
-**Purpose:** Orchestrates the entire pipeline. Clean, readable, easy to understand.
+This system performs:
 
-**Key Functions:**
-- `main()` – Main execution loop
-- `_visualize_debug()` – Display video with face boxes and IDs
-- `_print_headless()` – Print stats to terminal (no GUI)
-- `_print_final_report()` – Print final attention report
+1. Face Detection → SCRFD (ONNX)
+2. Face Identification → ArcFace embeddings
+3. Head Pose Filtering → Only count frontal faces
+4. Identity Matching → Cosine similarity
+5. Attention Time Tracking
+6. CSV + Summary Export
+7. People vs Time Graph Generation
 
-**Flow:**
+---
+
+# Module Breakdown
+
+---
+
+## 1️⃣ `main.py` (Core Pipeline)
+
+### Purpose
+
+Controls entire attention analytics pipeline.
+
+### Responsibilities
+
+| Component        | Purpose                 |
+| ---------------- | ----------------------- |
+| Camera Backend   | cv2 or Picamera2        |
+| SCRFD            | Face detection          |
+| ArcFace          | Embedding extraction    |
+| FaceMemory       | Identity assignment     |
+| Head Pose Filter | Frontal face validation |
+| Timeline Logger  | Graph data collection   |
+| CSV Export       | Save analytics          |
+| Graph Export     | Save PNG plot           |
+
+---
+
+### Runtime Flow
+
 ```
-Initialize Camera & Detector
-    ↓
+Initialize Camera (cv2 or Picamera2)
+        ↓
+Load SCRFD ONNX
+        ↓
+Load ArcFace ONNX
+        ↓
 Loop:
-    Read Frame → Detect Faces → Build Detections
-    ↓
-    Update Tracker (match IDs, accumulate time)
-    ↓
-    Display/Print Results
-    ↓
-    Exit on 'Q' or failure
-    ↓
-Print Final Report
+    Capture Frame
+        ↓
+    Detect Faces (SCRFD)
+        ↓
+    Filter: is_facing_camera()
+        ↓
+    Extract Embedding (ArcFace)
+        ↓
+    Identity Matching (Cosine Similarity)
+        ↓
+    Update Tracking + Attention Time
+        ↓
+    Cleanup Stale Faces
+        ↓
+    Store Timeline Data
+        ↓
+    Display / Print
+        ↓
+Exit → Save CSV → Save Graph
 ```
 
 ---
 
-### 2. `detector.py` (Detection Module)
-**Purpose:** Encapsulates all camera and face detection logic.
+# Identity System (Embedding-Based)
 
-**Class: FaceDetector**
-| Method | Purpose |
-|--------|---------|
-| `__init__(cascade_path)` | Load cascade, open camera (cv2 or Picamera2 on Pi) |
-| `read_frame()` | Get next video frame |
-| `detect_faces(frame)` | Find all frontal faces in frame |
-| `build_detections(faces)` | Convert face rectangles to detection dicts |
-| `get_fps(dt)` | Calculate FPS |
-| `release()` | Close camera & windows |
+### Class: `FaceMemory`
 
-**Key Points:**
-- Haar cascade **only detects frontal faces**, so detected = looking at camera
-- Uses `cv2.VideoCapture` on desktop/laptop
-- Uses `Picamera2` on Raspberry Pi when `IS_RASPBERRY_PI = True` (falls back to cv2 if unavailable)
+Instead of centroid tracking, we use embedding similarity.
 
----
-
-### 3. `tracker.py` (Tracking Module)
-**Purpose:** Encapsulates all face ID assignment and tracking logic.
-
-**Class: FaceTracker**
-| Method | Purpose |
-|--------|---------|
-| `update(detections, time, dt)` | Main update: match → assign IDs → track time |
-| `_compute_distances(detections)` | Calculate all pairwise centroid distances |
-| `_greedy_assignment(detections, pairs)` | One-to-one matching (greedy) |
-| `_assign_ids(detections, assignments, time)` | Reuse matched IDs, create new ones |
-| `_update_tracking(detections, time, dt)` | Update positions and times |
-| `_cleanup_stale(time, timeout)` | Remove faces not seen for > timeout |
-| `get_summary()` | Return dict of {face_id → attention_s, total_s} |
-
-**Greedy Nearest-Neighbor Algorithm:**
-1. Compute distances between all current and previous face centroids
-2. Sort by distance (smallest first)
-3. Iterate and assign: if both current and previous face unassigned AND distance < threshold, match them
-4. Each face used at most once per frame = **no ID collisions**
-
----
-
-### 4. `audio_player.py` (Audio Module)
-**Purpose:** Encapsulates audio playback and campaign-based audio selection.
-
-**Class: AudioPlayer**
-| Method | Purpose |
-|--------|---------|
-| `find_campaign_audio(campaign_name, base_dir)` | Search `Campain_Audio/<Campaign_name>/` for first MP3 |
-| `play(file_path)` | Start playing MP3 file |
-| `stop()` | Stop audio playback |
-| `is_playing()` | Check if audio is currently playing |
-| `time_remaining()` | Get remaining time in current track |
-| `manage(num_tracked)` | Auto-play while people present; let track finish naturally |
-
-**Key Features:**
-- Searches `Campain_Audio/<Campaign_name>/` for first `.mp3` file
-- Falls back to `AUDIO_FILE` config if campaign not found
-- Plays continuously while faces tracked; restarts automatically if people remain
-- Requires system VLC (install via `apt install vlc` on Raspberry Pi)
-
----
-
-## Config (`config.py`)
+### Matching Logic
 
 ```python
-DEBUG = True               # Show GUI window with face boxes and IDs
-DEBUG = False              # Print stats to terminal only
+sim = np.dot(embedding, stored_embedding)
+```
 
-Campaign_name = "default"  # Campaign folder to search for audio
-IS_RASPBERRY_PI = False    # Use Picamera2 on Raspberry Pi when True
-STALE_FACE_TIMEOUT = 3.0   # Remove faces not seen for > 3 seconds
-AUDIO_FILE = None          # Fallback audio file if campaign not found
+If:
+
+```
+similarity > threshold (default 0.45)
+```
+
+→ Reuse existing ID
+Else → Create new ID
+
+### Benefits
+
+* Re-identification after disappearance
+* More stable ID assignment
+* Person-level analytics
+* Scalable to vector database (future FAISS upgrade)
+
+---
+
+# Head Pose Filtering
+
+### Function: `is_facing_camera(landmarks)`
+
+Uses 5 keypoints:
+
+* Left eye
+* Right eye
+* Nose
+* Left mouth
+* Right mouth
+
+Computes:
+
+* Yaw ratio
+* Pitch ratio
+
+Only if:
+
+```
+yaw < 0.25 AND pitch < 0.7
+```
+
+→ Count as attention
+
+This prevents side profiles from being counted.
+
+---
+
+# Camera Backend
+
+Controlled via:
+
+```python
+IS_RASPBERRY_PI = True / False
+```
+
+### Desktop
+
+```python
+cv2.VideoCapture(0)
+```
+
+### Raspberry Pi
+
+```python
+Picamera2.capture_array()
+```
+
+Advantages of Picamera2:
+
+* Lower latency
+* Stable FPS
+* Native Pi camera stack
+* No extra conversion overhead
+
+---
+
+# Audio System
+
+## `audio_player.py`
+
+### Responsibilities
+
+* Auto-search campaign folder:
+
+```
+Campain_Audio/<Campaign_name>/
+```
+
+* Play first MP3 found
+* Stop when no faces present
+* Restart if people reappear
+
+Requires:
+
+* System VLC installed
+
+---
+
+# Configuration (`config.py`)
+
+```python
+DEBUG = True
+STALE_FACE_TIMEOUT = 3.0
+IS_RASPBERRY_PI = False
+
+Campaign_name = "default"
+AUDIO_FILE = None
 ```
 
 ---
 
-## Running the Script
+# Output System
 
-### 1. Install dependencies
-```bash
-pip install -r requirements.txt
+Each session produces:
+
+### 1️⃣ CSV Report
+
+Saved to:
+
+```
+Human_proximity_Results/attention_report_<timestamp>.csv
 ```
 
-### 2. Install system VLC (required for audio)
-**Windows/macOS:** Download from https://www.videolan.org/vlc/
+### CSV Format
 
-**Raspberry Pi:**
-```bash
-sudo apt update
-sudo apt install vlc
-```
-
-### 3. Set up Campaign Audio (optional)
-Create folder structure:
-```
-Campain_Audio/
-└── <Campaign_name>/
-    └── audio_file.mp3
-```
-
-Update `config.py`:
-```python
-Campaign_name = "<Campaign_name>"
-```
-
-### 4. Run with GUI (see video in real-time)
-```bash
-python face_detection.py
-# config.DEBUG must be True
-```
-
-### 5. Run headless (print stats only)
-```bash
-python face_detection.py
-# config.DEBUG must be False
-```
-
-### 6. Exit
-- GUI mode: Press **Q**
-- Terminal prints final report automatically
-
----
-
-## Output Example
-
-**Debug Mode (GUI):**
-```
-FPS: 30.1 | Detected: 2 | Tracked: 2
-```
-
-**Headless Mode (Terminal):**
-```python
-{'FPS': 29.85, 
- 'faces_detected': 2, 
- 'faces_tracked': 2, 
- 'attention_mapping': {
-   1: {'attention_s': 5.23, 'total_s': 5.23},
-   2: {'attention_s': 3.87, 'total_s': 3.87}
- }}
-```
-
-**Final Report:**
-```
-============================================================
-FINAL REPORT - Face Attention Times
-============================================================
-Face 1:
-  Attention Time:  45.32s
-  Total Time:      45.32s
-  Attention %:     100.0%
-
-Face 2:
-  Attention Time:  28.15s
-  Total Time:      28.15s
-  Attention %:     100.0%
-
-Campaign Duration (Start → Stop):  60.00s
-============================================================
-```
-
-**CSV Output Example** (Auto-saved to `Human_proximity_Results/`):
 ```csv
-Face_ID,Attention_Time_s,Total_Time_s
-1,45.32,45.32
-2,28.15,28.15
+Face_ID,Attention_Time_s,start_time,end_time,Total_Time_s
+1,8.0,2.1,10.1,8.0
+2,5.5,12.2,18.4,6.2
 
 Summary
 Total_People_Watched,2
-Total_Attention_Time_s,73.47
-Average_Attention_Time_s,36.74
-Campaign_Duration_s,60.0
+Total_Attention_Time_s,13.5
+Average_Attention_Time_s,6.75
+Campaign_Duration_s,45.3
 ```
 
 ---
 
-## How Face Tracking Works
+### Metrics
 
-### Example: Two people enter frame
-
-**Frame 1:**
-- Detect: Face_A at (100, 150), Face_B at (400, 200)
-- No previous faces → Create ID 1 (Face_A), ID 2 (Face_B)
-- Attention: 0.033s each (1 frame at 30 FPS)
-
-**Frame 2:**
-- Detect: Face at (102, 152), Face at (398, 205)
-- Compute distances to previous: (100→102=2px), (400→398=2px)
-- Both < threshold (50px) → Match Face 1 to detected[0], Face 2 to detected[1]
-- Reuse IDs 1 and 2
-- Attention: +0.033s each
-
-**Frame 3:**
-- Detect: Only 1 face at (105, 154)
-- Compute distances: Face 1 = 5px (match!), Face 2 = 300px (too far)
-- Match to ID 1 only
-- Face 2 still tracked but not seen this frame
-- Attention: ID 1 +0.033s, ID 2 no change
-
-**Frame 10 (3+ seconds later, Face 2 not seen):**
-- Cleanup removes Face 2 from tracking
-- Final report shows Face 2: 9 frames at 30 FPS = 0.3 seconds attention
+| Metric               | Meaning                         |
+| -------------------- | ------------------------------- |
+| Face_ID              | Unique embedding-based identity |
+| Attention_Time_s     | Time looking at camera          |
+| Total_Time_s         | Time present in frame           |
+| Total_People_Watched | Unique visitors                 |
+| Campaign_Duration_s  | Script runtime                  |
 
 ---
 
-## Why This Structure is Better
+### 2️⃣ People vs Time Graph
 
-| Aspect | Before | After |
-|--------|--------|-------|
-| **Lines** | 160 (monolithic) | 50+60+100 (modular) |
-| **Readability** | Hard to follow | Clear separation of concerns |
-| **Testing** | Can't test parts | Each module testable |
-| **Reuse** | Can't reuse logic | Use FaceTracker in other scripts |
-| **Debugging** | Where's the bug? | Check detector, tracker, or main |
-| **Changes** | Touch everything | Change only relevant module |
+Saved to:
+
+```
+Human_proximity_Results/people_vs_time_<timestamp>.png
+```
+
+Graph details:
+
+* X-axis → Time (seconds)
+* Y-axis → Number of people
+* Integer-only Y-axis enforced:
+
+```python
+MaxNLocator(integer=True)
+```
 
 ---
 
-## Next Steps
+# Performance Optimization Notes
 
-1. **Test locally:** `python face_detection.py`
-2. **Integrate with `human_proximity.py`:** Import and use the modules
-3. **Add export:** Save attention data to Excel/CSV
-4. **Upgrade tracking:** Replace greedy with Hungarian algorithm or DeepSORT for more robust matching
+For Raspberry Pi:
+
+* Use 640x480 resolution
+* Disable GUI (`DEBUG = False`)
+* Use Picamera2 backend
+* Consider embedding every N frames
+
+Current complexity:
+
+```
+O(N) per face for ID matching
+```
+
+Can be upgraded to FAISS for:
+
+```
+O(log N) similarity search
+```
+
+---
+
+
+# Example Final Summary (Terminal)
+
+```
+===== Campaign Summary =====
+Total_People_Watched     : 3
+Total_Attention_Time_s   : 16.7
+Average_Attention_Time_s : 5.57
+Campaign_Duration_s      : 45.3
+```
+
+---
+
+
