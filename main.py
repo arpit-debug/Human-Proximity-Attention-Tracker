@@ -39,7 +39,7 @@ class ArcFace:
 # ------------------ Identity Memory ------------------
 
 class FaceMemory:
-    def __init__(self, similarity_thresh=0.45):
+    def __init__(self, similarity_thresh=0.6):
         self.db = {}
         self.next_id = 1
         self.thresh = similarity_thresh
@@ -49,7 +49,7 @@ class FaceMemory:
 
     def get_id(self, emb):
         best_id = None
-        best_sim = 0
+        best_sim = -1
 
         for fid, stored_emb in self.db.items():
             sim = self.cosine(emb, stored_emb)
@@ -57,7 +57,7 @@ class FaceMemory:
                 best_sim = sim
                 best_id = fid
 
-        if best_sim > self.thresh:
+        if best_sim >= self.thresh:
             return best_id
 
         fid = self.next_id
@@ -123,6 +123,27 @@ def main():
         picam2.start()
     else:
         cap = cv2.VideoCapture(0)
+        # video_path = os.path.join(r"C:\Projects\Human-Proximity-Attention-Tracker\office_clip.mp4")
+        # cap = cv2.VideoCapture(video_path)
+
+        # if not cap.isOpened():
+        #     print("Error opening video file")
+        #     return
+        # # -------- GET VIDEO PROPERTIES --------
+        # fps_input = cap.get(cv2.CAP_PROP_FPS)
+        # frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        # frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        # # -------- OUTPUT VIDEO WRITER --------
+        # results_dir = os.path.join(script_dir, "Human_proximity_Results")
+        # os.makedirs(results_dir, exist_ok=True)
+
+        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # output_path = os.path.join(results_dir, f"output_{timestamp}.mp4")
+
+        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        # out = cv2.VideoWriter(output_path, fourcc, fps_input,
+        #                     (frame_width, frame_height))
 
     campaign_start_time = time.time()
     prev_time = 0
@@ -149,7 +170,19 @@ def main():
             prev_time = curr_time
             fps = 1/dt if dt > 0 else 0
 
+            # scale = 0.5  # 50% size
+            # small_frame = cv2.resize(frame, None, fx=scale, fy=scale)
+
+            # if frame_count % 3 == 0:
             boxes, landmarks = detector.detect(frame, 0.6)
+
+                # # boxes, landmarks = detector.detect(frame, 0.6)
+
+                # # Scale boxes back
+                # boxes = [(int(x1/scale), int(y1/scale), int(x2/scale), int(y2/scale))
+                #         for (x1,y1,x2,y2) in boxes]
+
+                # landmarks = [lm / scale for lm in landmarks]
 
             active_ids = set()
 
