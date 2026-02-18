@@ -162,9 +162,9 @@ def main():
                 if face_crop.size == 0:
                     continue
 
-                if frame_count % 10 == 0:
-                    emb = arcface.get_embedding(face_crop)
-                    fid = memory.get_id(emb)
+                # if frame_count % 10 == 0:
+                emb = arcface.get_embedding(face_crop)
+                fid = memory.get_id(emb)
 
                 active_ids.add(fid)
 
