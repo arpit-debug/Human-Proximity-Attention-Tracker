@@ -2,4 +2,4 @@ opencv-python
 numpy
 onnxruntime
 matplotlib
-python-vlc
+pygame

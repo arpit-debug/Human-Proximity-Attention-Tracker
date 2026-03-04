@@ -5,8 +5,9 @@ import csv
 import numpy as np
 from datetime import datetime
 import onnxruntime as ort
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+import matplotlib.dates as mdates
 
 
 from scrfd import SCRFD
@@ -89,6 +90,9 @@ def main():
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
+    campaign_start_dt = datetime.now()
+    print(f"✓ Campaign started at: {campaign_start_dt.strftime('%H:%M:%S')}")
+
     det_sess = ort.InferenceSession(
         os.path.join(script_dir, "Models/scrfd_500m_bnkps.onnx")
     )
@@ -98,9 +102,8 @@ def main():
     memory = FaceMemory()
 
     face_tracking = {}
-    face_history = {}
+    session_records = []   # store ALL sessions separately
 
-    # ✅ Timeline storage for graph
     timeline = []
     time_axis = []
 
@@ -113,7 +116,6 @@ def main():
 
     if config.IS_RASPBERRY_PI:
         from picamera2 import Picamera2
-
         picam2 = Picamera2()
         picam2.configure(
             picam2.create_preview_configuration(
@@ -123,33 +125,8 @@ def main():
         picam2.start()
     else:
         cap = cv2.VideoCapture(0)
-        # video_path = os.path.join(r"C:\Projects\Human-Proximity-Attention-Tracker\office_clip.mp4")
-        # cap = cv2.VideoCapture(video_path)
 
-        # if not cap.isOpened():
-        #     print("Error opening video file")
-        #     return
-        # # -------- GET VIDEO PROPERTIES --------
-        # fps_input = cap.get(cv2.CAP_PROP_FPS)
-        # frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        # frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        # # -------- OUTPUT VIDEO WRITER --------
-        # results_dir = os.path.join(script_dir, "Human_proximity_Results")
-        # os.makedirs(results_dir, exist_ok=True)
-
-        # timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # output_path = os.path.join(results_dir, f"output_{timestamp}.mp4")
-
-        # fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        # out = cv2.VideoWriter(output_path, fourcc, fps_input,
-        #                     (frame_width, frame_height))
-
-    campaign_start_time = time.time()
-    prev_time = 0
-    frame_count = 0
-
-    print("✓ SCRFD + ArcFace tracking started")
+    prev_time = time.time()
 
     try:
         while True:
@@ -164,27 +141,11 @@ def main():
                     break
 
             curr_time = time.time()
-            elapsed = curr_time - campaign_start_time
-
-            dt = curr_time - prev_time if prev_time != 0 else 0
+            dt = curr_time - prev_time
             prev_time = curr_time
             fps = 1/dt if dt > 0 else 0
 
-            # scale = 0.5  # 50% size
-            # small_frame = cv2.resize(frame, None, fx=scale, fy=scale)
-
-            # if frame_count % 3 == 0:
             boxes, landmarks = detector.detect(frame, 0.6)
-
-                # # boxes, landmarks = detector.detect(frame, 0.6)
-
-                # # Scale boxes back
-                # boxes = [(int(x1/scale), int(y1/scale), int(x2/scale), int(y2/scale))
-                #         for (x1,y1,x2,y2) in boxes]
-
-                # landmarks = [lm / scale for lm in landmarks]
-
-            active_ids = set()
 
             for (x1, y1, x2, y2), lm in zip(boxes, landmarks):
 
@@ -195,23 +156,22 @@ def main():
                 if face_crop.size == 0:
                     continue
 
-                # if frame_count % 10 == 0:
                 emb = arcface.get_embedding(face_crop)
                 fid = memory.get_id(emb)
 
-                active_ids.add(fid)
+                now_clock = datetime.now()
 
                 if fid not in face_tracking:
                     face_tracking[fid] = {
                         "attention_time": 0.0,
                         "total_time": 0.0,
-                        "start_time": elapsed,   # ✅ added
-                        "end_time": elapsed,     # ✅ added
+                        "start_clock": now_clock,
+                        "end_clock": now_clock,
                         "last_seen": curr_time
                     }
 
                 face_tracking[fid]["last_seen"] = curr_time
-                face_tracking[fid]["end_time"] = elapsed  # ✅ update end_time
+                face_tracking[fid]["end_clock"] = now_clock
                 face_tracking[fid]["total_time"] += dt
                 face_tracking[fid]["attention_time"] += dt
 
@@ -222,18 +182,23 @@ def main():
                                 cv2.FONT_HERSHEY_SIMPLEX,0.5,(0,255,0),1)
 
             stale = [fid for fid in face_tracking
-                     if curr_time - face_tracking[fid]["last_seen"]
-                     > config.STALE_FACE_TIMEOUT]
+                    if curr_time - face_tracking[fid]["last_seen"]
+                    > config.STALE_FACE_TIMEOUT]
 
             for fid in stale:
-                face_history[fid] = face_tracking[fid]
+                session_records.append({
+                    "Face_ID": fid,
+                    "Start_Time": face_tracking[fid]["start_clock"],
+                    "End_Time": face_tracking[fid]["end_clock"],
+                    "Attention_Time": face_tracking[fid]["attention_time"],
+                    "Total_Time": face_tracking[fid]["total_time"]
+                })
                 del face_tracking[fid]
 
             audio.manage(len(face_tracking))
 
-            # ✅ Store graph data
             timeline.append(len(face_tracking))
-            time_axis.append(elapsed)
+            time_axis.append(datetime.now())
 
             if config.DEBUG:
                 cv2.putText(frame,f"FPS:{int(fps)}",
@@ -244,7 +209,6 @@ def main():
                     raise KeyboardInterrupt
                 print(f"FPS: {fps:.1f} | Detected: {len(boxes)} | Tracked: {len(face_tracking)}")
 
-            frame_count += 1
 
     except KeyboardInterrupt:
         print("\nStopped")
@@ -255,23 +219,35 @@ def main():
         else:
             cap.release()
             cv2.destroyAllWindows()
+
         audio.stop()
 
-        campaign_duration = time.time() - campaign_start_time
-        save_report(face_tracking, face_history,
-                    script_dir, campaign_duration)
+        campaign_duration = (datetime.now() - campaign_start_dt).total_seconds()
 
-        plot_graph(time_axis, timeline, script_dir)  # ✅ added
+        # Save remaining active sessions
+        for fid in face_tracking:
+            session_records.append({
+                "Face_ID": fid,
+                "Start_Time": face_tracking[fid]["start_clock"],
+                "End_Time": face_tracking[fid]["end_clock"],
+                "Attention_Time": face_tracking[fid]["attention_time"],
+                "Total_Time": face_tracking[fid]["total_time"]
+            })
+
+        save_report(session_records,
+                    script_dir,
+                    campaign_duration,
+                    campaign_start_dt)
+
+        plot_graph(time_axis, timeline, script_dir)
 
 
 # ------------------ CSV ------------------
 
-def save_report(face_tracking, face_history,
-                script_dir, campaign_duration):
-
-    all_faces = {}
-    all_faces.update(face_history)
-    all_faces.update(face_tracking)
+def save_report(session_records,
+                script_dir,
+                campaign_duration,
+                campaign_start_dt):
 
     results_dir = os.path.join(script_dir,"Human_proximity_Results")
     os.makedirs(results_dir,exist_ok=True)
@@ -280,50 +256,38 @@ def save_report(face_tracking, face_history,
     csv_path = os.path.join(results_dir,
                             f"attention_report_{timestamp}.csv")
 
-    total_attention = 0.0
-
-    for fid in all_faces:
-        total_attention += all_faces[fid]["attention_time"]
-
-    total_people = len(all_faces)
-    avg_attention = (total_attention / total_people) if total_people > 0 else 0
+    total_attention = sum(s["Attention_Time"] for s in session_records)
+    unique_people = len(set(s["Face_ID"] for s in session_records))
+    avg_attention = total_attention / unique_people if unique_people > 0 else 0
 
     with open(csv_path,"w",newline="") as f:
         writer = csv.writer(f)
 
-        # ---- Detailed Per Face ----
-        writer.writerow(["Face_ID","Attention_Time_s","start_time","end_time","Total_Time_s"])
+        writer.writerow(["Campaign_Start_Time", campaign_start_dt.strftime("%H:%M:%S")])
+        writer.writerow([])
+        writer.writerow(["Face_ID","Start_Time","End_Time","Attention_Time_s","Total_Time_s"])
 
-        for fid in sorted(all_faces.keys()):
-            data = all_faces[fid]
+        for s in session_records:
             writer.writerow([
-                fid,
-                round(data["attention_time"],2),
-                round(data["start_time"],2),
-                round(data["end_time"],2),
-                round(data["total_time"],2)
+                s["Face_ID"],
+                s["Start_Time"].strftime("%H:%M:%S"),
+                s["End_Time"].strftime("%H:%M:%S"),
+                round(s["Attention_Time"],2),
+                round(s["Total_Time"],2)
             ])
 
-        # ---- Summary Section ----
         writer.writerow([])
         writer.writerow(["Summary"])
-        writer.writerow(["Total_People_Watched", total_people])
+        writer.writerow(["Unique_People", unique_people])
         writer.writerow(["Total_Attention_Time_s", round(total_attention,2)])
         writer.writerow(["Average_Attention_Time_s", round(avg_attention,2)])
         writer.writerow(["Campaign_Duration_s", round(campaign_duration,2)])
 
-    # ---- Print Summary in Terminal ----
-    print("\n===== Campaign Summary =====")
-    print(f"Total_People_Watched     : {total_people}")
-    print(f"Total_Attention_Time_s   : {round(total_attention,2)}")
-    print(f"Average_Attention_Time_s : {round(avg_attention,2)}")
-    print(f"Campaign_Duration_s      : {round(campaign_duration,2)}")
-
     print(f"\n✓ Report saved: {csv_path}")
 
 
-
 # ------------------ GRAPH ------------------
+
 
 def plot_graph(time_axis, timeline, script_dir):
 
@@ -332,11 +296,14 @@ def plot_graph(time_axis, timeline, script_dir):
 
     plt.figure()
     plt.plot(time_axis, timeline)
-    plt.xlabel("Time (seconds)")
+    plt.xlabel("Clock Time")
     plt.ylabel("Number of People")
     plt.title("People vs Time")
     plt.grid()
+
     plt.gca().yaxis.set_major_locator(MaxNLocator(integer=True))
+    plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    plt.gcf().autofmt_xdate()
 
     graph_path = os.path.join(results_dir,
                                f"people_vs_time_{timestamp}.png")
